@@ -548,3 +548,80 @@ class USDroughtsDatamodule(Datamodule):
     @property
     def dataset_name(self) -> str:
         return "droughts"
+
+
+class GaussianDatamodule(Datamodule):
+    def __init__(
+        self,
+        data_dir: Path | str = Path.cwd() / "data",
+        random_seed: int = 42,
+        batch_size: int = 32,
+        fourier_transform: bool = False,
+        standardize: bool = False,
+        max_len: int = 256,
+        num_samples: int = 2000,
+        length_scale: float = 0.08,
+        signal_variance: float = 1.0,
+        noise_variance: float = 0.05,
+    ) -> None:
+        super().__init__(
+            data_dir=data_dir,
+            random_seed=random_seed,
+            batch_size=batch_size,
+            fourier_transform=fourier_transform,
+            standardize=standardize,
+        )
+        self.max_len = max_len
+        self.num_samples = num_samples
+        self.length_scale = length_scale
+        self.signal_variance = signal_variance
+        self.noise_variance = noise_variance
+
+    def setup(self, stage: str = "fit") -> None:
+        path_train = self.data_dir / "X_train.pt"
+        path_test = self.data_dir / "X_test.pt"
+
+        if not path_train.exists() or not path_test.exists():
+            logging.info(
+                f"Preprocessed tensors for {self.dataset_name} not found. Generating synthetic GP data."
+            )
+            self.download_data()
+
+        self.X_train = torch.load(path_train)
+        self.X_test = torch.load(path_test)
+        self.y_train = None
+        self.y_test = None
+
+        assert isinstance(self.X_train, torch.Tensor)
+        assert isinstance(self.X_test, torch.Tensor)
+        assert self.X_train.ndim == 3 and self.X_train.shape[2] == 1
+        assert self.X_train.shape[1] == self.max_len
+        assert self.X_test.shape == self.X_train.shape
+
+    def download_data(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        n_series = 2 * self.num_samples
+        timesteps = np.arange(self.max_len).reshape(-1, 1)
+        cov = self._rbf_covariance(timesteps)
+        jitter = 1e-6 * np.eye(self.max_len)
+        cov = cov + jitter
+        rng = np.random.default_rng(self.random_seed)
+        samples = rng.multivariate_normal(
+            mean=np.zeros(self.max_len), cov=cov, size=n_series
+        )
+        samples = samples.astype(np.float32)
+        X_train = torch.tensor(samples[: self.num_samples]).unsqueeze(2)
+        X_test = torch.tensor(samples[self.num_samples :]).unsqueeze(2)
+        torch.save(X_train, self.data_dir / "X_train.pt")
+        torch.save(X_test, self.data_dir / "X_test.pt")
+
+    def _rbf_covariance(self, timesteps: np.ndarray) -> np.ndarray:
+        diff = timesteps - timesteps.T
+        kernel = np.exp(-(diff**2) / (2 * self.length_scale**2))
+        kernel *= self.signal_variance
+        kernel += self.noise_variance * np.eye(self.max_len)
+        return kernel
+
+    @property
+    def dataset_name(self) -> str:
+        return "gaussian"

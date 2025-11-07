@@ -1,0 +1,11 @@
+_target_: fdiff.dataloaders.datamodules.GaussianDatamodule
+data_dir: ${hydra:runtime.cwd}/data
+random_seed: ${random_seed}
+fourier_transform: ${fourier_transform}
+standardize: ${standardize}
+batch_size: 64
+max_len: 256
+num_samples: 2000
+length_scale: 0.08
+signal_variance: 1.0
+noise_variance: 0.05
