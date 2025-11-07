@@ -72,6 +72,12 @@ test = [
 "Homepage" = "https://github.com/JonathanCrabbe/FourierDiffusion/"
 "Source" = "https://github.com/JonathanCrabbe/FourierDiffusion/"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [build-system]
 # These are the assumed default build requirements from pip:
 # https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
