@@ -560,7 +560,7 @@ class GaussianDatamodule(Datamodule):
         standardize: bool = False,
         max_len: int = 256,
         num_samples: int = 2000,
-        length_scale: float = 0.08,
+        length_scale: float = 8.0,
         signal_variance: float = 1.0,
         noise_variance: float = 0.05,
     ) -> None:
