@@ -6,6 +6,6 @@ standardize: ${standardize}
 batch_size: 64
 max_len: 256
 num_samples: 2000
-length_scale: 0.08
+length_scale: 8.0
 signal_variance: 1.0
 noise_variance: 0.05
