@@ -581,11 +581,10 @@ class GaussianDatamodule(Datamodule):
         path_train = self.data_dir / "X_train.pt"
         path_test = self.data_dir / "X_test.pt"
 
-        if not path_train.exists() or not path_test.exists():
-            logging.info(
-                f"Preprocessed tensors for {self.dataset_name} not found. Generating synthetic GP data."
-            )
-            self.download_data()
+        logging.info(
+            "Generating synthetic GP data for Gaussian dataset (overwrites any existing cache)."
+        )
+        self.download_data()
 
         self.X_train = torch.load(path_train)
         self.X_test = torch.load(path_test)
