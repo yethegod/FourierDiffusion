@@ -624,3 +624,119 @@ class GaussianDatamodule(Datamodule):
     @property
     def dataset_name(self) -> str:
         return "gaussian"
+
+
+class SpikeImpulseDatamodule(Datamodule):
+    """Synthetic event-driven 1D time series: sparse spikes convolved with an exponential impulse response.
+
+    Data generating process (discrete time):
+        s[t] ~ Bernoulli(p) * amplitude
+        h[u] = exp(-u/tau), u=0..kernel_len-1
+        x[t] = (s * h)[t] + noise
+
+    Output tensors follow the repo convention: X has shape (N, T, 1).
+    """
+
+    def __init__(
+        self,
+        data_dir: Path | str = Path.cwd() / "data",
+        random_seed: int = 42,
+        batch_size: int = 32,
+        fourier_transform: bool = False,
+        standardize: bool = False,
+        max_len: int = 256,
+        num_samples: int = 2000,
+        p: float = 0.02,
+        tau: float = 10.0,
+        kernel_len: int = 64,
+        amp_dist: str = "laplace",  # "laplace" | "normal" | "fixed"
+        amp_scale: float = 1.0,
+        noise_std: float = 0.05,
+    ) -> None:
+        super().__init__(
+            data_dir=data_dir,
+            random_seed=random_seed,
+            batch_size=batch_size,
+            fourier_transform=fourier_transform,
+            standardize=standardize,
+        )
+        self.max_len = max_len
+        self.num_samples = num_samples
+        self.p = p
+        self.tau = tau
+        self.kernel_len = kernel_len
+        self.amp_dist = amp_dist
+        self.amp_scale = amp_scale
+        self.noise_std = noise_std
+
+    def setup(self, stage: str = "fit") -> None:
+        path_train = self.data_dir / "X_train.pt"
+        path_test = self.data_dir / "X_test.pt"
+
+        logging.info(
+            "Generating SpikeImpulse synthetic data (exp kernel) "
+            "(overwrites any existing cache)."
+        )
+        self.download_data()
+
+        self.X_train = torch.load(path_train)
+        self.X_test = torch.load(path_test)
+        self.y_train = None
+        self.y_test = None
+
+        assert isinstance(self.X_train, torch.Tensor)
+        assert isinstance(self.X_test, torch.Tensor)
+        assert self.X_train.ndim == 3 and self.X_train.shape[2] == 1
+        assert self.X_train.shape[1] == self.max_len
+        assert self.X_test.shape == self.X_train.shape
+
+    def download_data(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        T = self.max_len
+        n_series = 2 * self.num_samples
+        rng = np.random.default_rng(self.random_seed)
+
+        # Exponential impulse response (L2-normalized for stable amplitude)
+        u = np.arange(self.kernel_len, dtype=np.float32)
+        h = np.exp(-u / max(1e-6, float(self.tau))).astype(np.float32)
+        h = h / (np.linalg.norm(h) + 1e-8)
+
+        X = np.zeros((n_series, T), dtype=np.float32)
+
+        for i in range(n_series):
+            # sparse spike mask
+            mask = (rng.uniform(size=T) < self.p).astype(np.float32)
+
+            # amplitudes
+            if self.amp_dist == "laplace":
+                amp = rng.laplace(loc=0.0, scale=self.amp_scale, size=T).astype(np.float32)
+            elif self.amp_dist == "normal":
+                amp = rng.normal(loc=0.0, scale=self.amp_scale, size=T).astype(np.float32)
+            elif self.amp_dist == "fixed":
+                amp = (np.ones(T, dtype=np.float32) * self.amp_scale)
+            else:
+                raise ValueError(
+                    f"Unknown amp_dist={self.amp_dist}. Use 'laplace', 'normal', or 'fixed'."
+                )
+
+            s = mask * amp
+
+            # causal-ish convolution then truncate to length T
+            x = np.convolve(s, h, mode="full")[:T].astype(np.float32)
+
+            # observation noise
+            if self.noise_std > 0:
+                x += (self.noise_std * rng.normal(size=T)).astype(np.float32)
+
+            X[i] = x
+
+        X_train = torch.tensor(X[: self.num_samples], dtype=torch.float32).unsqueeze(2)
+        X_test = torch.tensor(X[self.num_samples :], dtype=torch.float32).unsqueeze(2)
+
+        torch.save(X_train, self.data_dir / "X_train.pt")
+        torch.save(X_test, self.data_dir / "X_test.pt")
+
+    @property
+    def dataset_name(self) -> str:
+        return "spike_impulse"
