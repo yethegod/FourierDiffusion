@@ -50,7 +50,8 @@ class SamplingRunner:
         best_checkpoint_path = get_best_checkpoint(self.save_dir / "checkpoints")
         model_type = get_model_type(train_cfg)
         self.score_model = model_type.load_from_checkpoint(
-            checkpoint_path=best_checkpoint_path
+            checkpoint_path=best_checkpoint_path,
+            weights_only=False,
         )
         if torch.cuda.is_available():
             self.score_model.to(device=torch.device("cuda"))
