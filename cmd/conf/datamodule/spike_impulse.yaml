@@ -1,0 +1,14 @@
+_target_: fdiff.dataloaders.datamodules.SpikeImpulseDatamodule
+data_dir: ${hydra:runtime.cwd}/data
+random_seed: ${random_seed}
+fourier_transform: ${fourier_transform}
+standardize: ${standardize}
+batch_size: 64
+max_len: 256
+num_samples: 2000
+p: 0.005
+tau: 3.0
+kernel_len: 24
+amp_dist: laplace
+amp_scale: 1.0
+noise_std: 0.05
